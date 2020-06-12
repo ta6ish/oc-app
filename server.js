@@ -6,7 +6,6 @@ var cors = require('cors');
     
 var allowCrossDomain = function(req, res, next) {
  
-      res.header('Access-Control-Allow-Origin', '*');
       res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
       res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
    
@@ -14,6 +13,7 @@ var allowCrossDomain = function(req, res, next) {
 };
 
 app.use(cors());
+app.use(allowCrossDomain);
 
 var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080,
     ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0',
