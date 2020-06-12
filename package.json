@@ -4,7 +4,8 @@
   "description": "Node.js sample app for OpenShift 3",
   "main": "server.js",
   "dependencies": {
-    "express": "^4.13.4"
+    "express": "^4.13.4",
+    "cors": "^2.8.5"
   },
   "engine": {
     "node": "*",
