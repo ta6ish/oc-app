@@ -1,105 +1,145 @@
 //  OpenShift sample Node application
 var express = require('express'),
-    app     = express(),
-    morgan  = require('morgan');
+    app     = express();
+var data = {};
+var cors = require('cors');
     
-Object.assign=require('object-assign')
+var allowCrossDomain = function(req, res, next) {
+ 
+      res.header('Access-Control-Allow-Origin', '*');
+      res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+   
+      next();
+};
 
-app.engine('html', require('ejs').renderFile);
-app.use(morgan('combined'))
+app.use(cors());
 
 var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080,
     ip   = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP || '0.0.0.0',
     mongoURL = process.env.OPENSHIFT_MONGODB_DB_URL || process.env.MONGO_URL,
     mongoURLLabel = "";
 
-if (mongoURL == null && process.env.DATABASE_SERVICE_NAME) {
-  var mongoServiceName = process.env.DATABASE_SERVICE_NAME.toUpperCase(),
-      mongoHost = process.env[mongoServiceName + '_SERVICE_HOST'],
-      mongoPort = process.env[mongoServiceName + '_SERVICE_PORT'],
-      mongoDatabase = process.env[mongoServiceName + '_DATABASE'],
-      mongoPassword = process.env[mongoServiceName + '_PASSWORD']
-      mongoUser = process.env[mongoServiceName + '_USER'];
 
-  if (mongoHost && mongoPort && mongoDatabase) {
-    mongoURLLabel = mongoURL = 'mongodb://';
-    if (mongoUser && mongoPassword) {
-      mongoURL += mongoUser + ':' + mongoPassword + '@';
-    }
-    // Provide UI label that excludes user id and pw
-    mongoURLLabel += mongoHost + ':' + mongoPort + '/' + mongoDatabase;
-    mongoURL += mongoHost + ':' +  mongoPort + '/' + mongoDatabase;
-
-  }
-}
-var db = null,
-    dbDetails = new Object();
-
-var initDb = function(callback) {
-  if (mongoURL == null) return;
-
-  var mongodb = require('mongodb');
-  if (mongodb == null) return;
-
-  mongodb.connect(mongoURL, function(err, conn) {
-    if (err) {
-      callback(err);
-      return;
-    }
-
-    db = conn;
-    dbDetails.databaseName = db.databaseName;
-    dbDetails.url = mongoURLLabel;
-    dbDetails.type = 'MongoDB';
-
-    console.log('Connected to MongoDB at: %s', mongoURL);
-  });
-};
 
 app.get('/', function (req, res) {
-  // try to initialize the db on every request if it's not already
-  // initialized.
-  if (!db) {
-    initDb(function(err){});
-  }
-  if (db) {
-    var col = db.collection('counts');
-    // Create a document with request IP and current time of request
-    col.insert({ip: req.ip, date: Date.now()});
-    col.count(function(err, count){
-      res.render('index.html', { pageCountMessage : count, dbInfo: dbDetails });
-    });
-  } else {
-    res.render('index.html', { pageCountMessage : null});
-  }
+  var d =  new Date().toUTCString();
+  res.send(d);  
 });
 
-app.get('/pagecount', function (req, res) {
-  // try to initialize the db on every request if it's not already
-  // initialized.
-  if (!db) {
-    initDb(function(err){});
-  }
-  if (db) {
-    db.collection('counts').count(function(err, count ){
-      res.send('{ pageCount: ' + count + '}');
-    });
-  } else {
-    res.send('{ pageCount: -1 }');
-  }
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+app.get('/qOpen', function(req, res) {
+    var quoteNo = req.query.quoteNo;
+    var name = req.query.name;
+
+
+    if (quoteNo in data) {  // Is the quote already locked?
+
+        if (name == data[quoteNo].name) {   // Is the request from the same user who locked it the first time?
+
+            // Update the last Update time
+            data[quoteNo].lastUpdateTime = Date.now();
+
+            // nothing really to do, access has already been granted
+            res.send('{"result":"ok"}');
+        }
+        else {
+            // A different user is requesting access
+
+            // deny it
+            res.send('{"result":"no","name":"' + name + '"}');
+        }
+    }
+    else {
+        // First time this quote is getting locked
+
+
+        // store quote no in the list along with: who is locking it, and the current time
+        data[quoteNo] = {name: name, lastUpdateTime: Date.now()};
+
+        // Grant access
+        res.send('{"result":"ok"}');
+    }
 });
 
-// error handling
-app.use(function(err, req, res, next){
-  console.error(err.stack);
-  res.status(500).send('Something bad happened!');
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+app.get('/qClose', function(req, res) {
+    console.log("Got a Close request");
+    var quoteNo = req.query.quoteNo;
+
+    delete data[quoteNo];
+
+    res.send('{"result":"ok"}');
 });
 
-initDb(function(err){
-  console.log('Error connecting to Mongo. Message:\n'+err);
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+app.get('/clearUserQuotes', function(req, res) {
+    console.log("Got a request to clear user quotes");
+    var full_name = req.query.name;
+    
+    for(var quoteNo in data) {
+      
+      if(data.hasOwnProperty(quoteNo)) {
+        if(data[quoteNo].name == full_name) {
+          delete data[quoteNo];
+        }
+      }
+    }
+
+    res.send('{"result":"ok"}');
 });
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+app.get('/qList', function(req, res) {
+    console.log('Got List Request');
+    var list='';
+
+    for (var key in data) {
+        if (data.hasOwnProperty(key)) {
+            list += '{"quoteNo":"' + key + '","name":"' + data[key].name + '"},';
+        }
+    }
+
+    res.send('{"list": [' + list.substr(0, list.length-1) + ']}');
+});
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+app.get('/qReset', function(req, res) {
+    data = {};
+    res.send('{"result":"ok"}');
+});
+
+function checkStatus() {
+      var timeNow = Date.now();
+
+      //console.log("");
+      //console.log("-------------");
+      //console.log('Status Check at ' + timeNow);
+
+      for (var key in data) {
+           //console.log(key + " " + data[key].name + " " + data[key].lastUpdateTime);
+
+          // check how much time has elapsed for each quote
+
+           var timeLapsed = timeNow - data[key].lastUpdateTime;
+
+           if (timeLapsed > 60000) {
+               // more then 1 minute since we heard last from the browser
+
+               //console.log('No response for ' + timeLapsed + 'seconds. Delete It: ' + key + " " + data[key].name);
+
+               // browser is not sending any messages, release lock on quote
+               delete data[key];
+           }
+      }
+     // console.log("-------------");
+     // console.log("");
+ }
 
 app.listen(port, ip);
 console.log('Server running on http://%s:%s', ip, port);
+
+checkStatus();
+ setInterval(checkStatus, 60000);
 
 module.exports = app ;
