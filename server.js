@@ -27,7 +27,7 @@ var port = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080,
 
 app.get("/", function (req, res) {
     const d = new Date().toUTCString();
-    res.send(d);
+    res.send(d.concat(" V1"));
 });
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
