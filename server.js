@@ -110,9 +110,11 @@ app.get("/qList", function (req, res) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 app.get("/qReset", function (req, res) {
-    Object.keys(data).forEach((location) => {
+    var location = req.query.location || "san-leandro";
+    
+    if(data[location]) {
         data[location] = {};
-    });
+    }
     res.send('{"result":"ok"}');
 });
 
